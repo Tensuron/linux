@@ -911,8 +911,9 @@ int proc_douintvec_minmax(const struct ctl_table *table, int write,
 		.min = (unsigned int *) table->extra1,
 		.max = (unsigned int *) table->extra2,
 	};
-	return do_proc_douintvec(table, write, buffer, lenp, ppos,
-				 do_proc_douintvec_minmax_conv, &param);
+	return do_proc_dointvec(table, write, buffer, lenp, ppos,
+			(int (*)(bool *, unsigned long *, int *, int, void *))
+			(void *)do_proc_douintvec_minmax_conv, &param);
 }
 
 /**
@@ -1595,6 +1596,15 @@ static const struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= SYSCTL_NEG_ONE,
+		.extra2		= SYSCTL_ONE,
+	},
+	{
+		.procname	= "kptr_restrict",
+		.data		= &kptr_restrict,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,
 		.extra2		= SYSCTL_ONE,
 	},
 #endif
