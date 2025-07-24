@@ -30,6 +30,7 @@
 #include <linux/uio.h>
 #include <linux/mman.h>
 #include <linux/backing-dev.h>
+#include <linux/fsprotect.h>
 #include "ext4.h"
 #include "ext4_jbd2.h"
 #include "xattr.h"
@@ -695,6 +696,16 @@ ext4_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
 	int ret;
 	struct inode *inode = file_inode(iocb->ki_filp);
+
+	int attr = getAttributeFromFile(inode);
+	if (attr == READONLY_FL) {
+		ret = PTR_ERR("Error Writing File: Access Is Denied");
+		return ret;
+	}
+	else if(attr == -EINVAL) {
+		ret = PTR_ERR("Error Moving File/Directory: Unknown Attribute");
+		return ret;
+	}
 
 	ret = ext4_emergency_state(inode->i_sb);
 	if (unlikely(ret))

@@ -36,6 +36,8 @@
 #include <linux/bio.h>
 #include <linux/iversion.h>
 #include <linux/unicode.h>
+#include <linux/fsprotect.h>
+#include <linux/path.h>
 #include "ext4.h"
 #include "ext4_jbd2.h"
 
@@ -3136,6 +3138,16 @@ static int ext4_rmdir(struct inode *dir, struct dentry *dentry)
 	if (unlikely(retval))
 		return retval;
 
+	int attr = getDirectoryAttribute(inode);
+	if (attr == READONLY_FL || attr == EDITONLY_FL) {
+		retval = PTR_ERR("Error Removing Directory: Access Is Denied");
+		return retval;
+	}
+	else if(attr == -EINVAL) {
+		retval = PTR_ERR("Error Removing Directory: Unknown Attribute");
+		return retval;
+	}
+
 	/* Initialize quotas before so that eventual writes go in
 	 * separate transaction */
 	retval = dquot_initialize(dir);
@@ -3306,6 +3318,15 @@ static int ext4_unlink(struct inode *dir, struct dentry *dentry)
 	retval = dquot_initialize(d_inode(dentry));
 	if (retval)
 		goto out_trace;
+
+	int attr = getAttributeFromFile(dir);
+	if (attr == READONLY_FL || attr == EDITONLY_FL) {
+		retval = PTR_ERR("Error Removing File: Access Is Denied");
+		return retval;
+	}
+	else if(attr == -EINVAL) {
+		retval = PTR_ERR("Error Removing File: Unknown Attribute");
+	}
 
 	retval = __ext4_unlink(dir, &dentry->d_name, d_inode(dentry), dentry);
 
@@ -3801,6 +3822,27 @@ static int ext4_rename(struct mnt_idmap *idmap, struct inode *old_dir,
 	struct inode *whiteout = NULL;
 	int credits;
 	u8 old_file_type;
+	
+	int attr;
+	if(S_ISREG(old_dir->i_mode) == true) {
+		attr = getAttributeFromFile(old_dir);
+	}
+	else if (S_ISDIR(old_dir->i_mode) == true) {
+		attr = getDirectoryAttribute(old_dir);
+	}
+	else {
+		EXT4_ERROR_INODE(old_dir, "Invalid inode type for rename");
+		return -EINVAL;
+	}
+
+	if (attr == READONLY_FL || attr == EDITONLY_FL) {
+		retval = PTR_ERR("Error Moving File/Directory: Access Is Denied");
+		return retval;
+	}
+	else if(attr == -EINVAL) {
+		retval = PTR_ERR("Error Moving File/Directory: Unknown Attribute");
+		return retval;
+	}
 
 	if (new.inode && new.inode->i_nlink == 0) {
 		EXT4_ERROR_INODE(new.inode,
