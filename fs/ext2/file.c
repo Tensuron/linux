@@ -26,6 +26,7 @@
 #include <linux/iomap.h>
 #include <linux/uio.h>
 #include <linux/buffer_head.h>
+#include <linux/fsprotect.h>
 #include "ext2.h"
 #include "xattr.h"
 #include "acl.h"
@@ -296,6 +297,17 @@ static ssize_t ext2_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	if (IS_DAX(iocb->ki_filp->f_mapping->host))
 		return ext2_dax_write_iter(iocb, from);
 #endif
+	struct file *file = iocb->ki_filp;
+    struct inode *inode = file->f_inode;
+
+	int attr = getAttributeFromFile(inode);
+	if (attr == READONLY_FL || attr == EDITONLY_FL) {
+		return PTR_ERR("Error Moving File/Directory: Access Is Denied");
+	}
+	else if(attr == -EINVAL) {
+		return PTR_ERR("Error Moving File/Directory: Unknown Attribute");
+	}
+
 	if (iocb->ki_flags & IOCB_DIRECT)
 		return ext2_dio_write_iter(iocb, from);
 
