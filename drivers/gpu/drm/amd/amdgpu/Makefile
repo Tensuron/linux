@@ -43,7 +43,7 @@ ccflags-y := -I$(FULL_AMD_PATH)/include/asic_reg \
 subdir-ccflags-y += -Wno-override-init
 subdir-ccflags-$(CONFIG_DRM_AMDGPU_WERROR) += -Werror
 
-amdgpu-y := amdgpu_drv.o
+amdgpu-y := amdgpu_drv.o amdgpu_power.o
 
 # add KMS driver
 amdgpu-y += amdgpu_device.o amdgpu_doorbell_mgr.o amdgpu_kms.o \

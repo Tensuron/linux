@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config GPU_POWER_MGMT
+	tristate "GPU Power Profile Management"
+	depends on PM
+	help
+	  This enables the GPU power profile management system that provides
+	  optimized profiles for different use cases:
+	  
+	  - Power Save: Optimized for battery life
+	  - Balanced: Normal performance
+	  - High Performance: Maximum performance with AI optimization
+	  
+	  The system includes automatic AI-based performance tuning in
+	  high performance mode for optimal gaming and video editing
+	  performance while managing thermals and power consumption.
+	  
+	  If unsure, say N.
