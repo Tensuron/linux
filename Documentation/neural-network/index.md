@@ -59,18 +59,8 @@ neural_network_unref(nn);
 ## File Locations
 - **Header**: `/include/uapi/linux/neural.h`
 - **Implementation**: `/kernel/module/neural.c`
-- **AI Guard Integration**: `/security/aiguard/neural.c`
-- **Test Suite**: `/kernel/module/neural_test.c`
-
-## Configuration
-The neural network can be configured through:
-- Kernel configuration options (`CONFIG_NEURAL_NETWORK`)
-- Module parameters (`neural_enable_simd`, `neural_cache_timeout_ms`)
-- Runtime DebugFS interface (`/sys/kernel/debug/neural_network/`)
 
 ## Support
 For issues and questions:
 - Check the debugging guide for troubleshooting
-- Review kernel logs for error messages
-- Use the test suite to validate functionality
 - Monitor statistics via DebugFS interface
