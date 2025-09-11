@@ -9,6 +9,13 @@
 #define _UAPI_NEURAL_MODULE_H
 
 #include <linux/types.h>
+
+/* Public API function declarations */
+_Bool neural_validate_input(const s32 *input, u32 size);
+_Bool neural_validate_weights(const s32 *weights, u32 size);
+
+/* Internal kernel API */
+#ifdef __KERNEL__
 #include <linux/list.h>
 #include <linux/spinlock.h>
 #include <linux/atomic.h>
@@ -36,6 +43,7 @@
 #include <linux/uaccess.h>
 #include <asm/fpu/api.h>
 #include <asm/simd.h>
+#endif /* __KERNEL__ */
 
 /* Neural network configuration */
 #define NEURAL_MAX_LAYERS 16
@@ -84,8 +92,8 @@ void *neural_alloc_numa(size_t size, int node);
 void *neural_alloc_interleaved(size_t size);
 void neural_vector_add_simd(const s32 *a, const s32 *b, s32 *result, u32 size);
 s32 neural_vector_dot_simd(const s32 *a, const s32 *b, u32 size);
-bool neural_validate_input(const s32 *input, u32 size);
-bool neural_validate_weights(const s32 *weights, u32 size);
+_Bool neural_validate_input(const s32 *input, u32 size);
+_Bool neural_validate_weights(const s32 *weights, u32 size);
 s32 neural_fp_sqrt(s32 x);
 s32 neural_fp_exp(s32 x);
 
@@ -125,7 +133,7 @@ typedef struct neural_layer {
     u32 output_size;                /* Number of outputs */
     u8 activation_type;             /* 0=ReLU, 1=Sigmoid, 2=Linear, 3=Tanh, 4=Leaky_ReLU */
     u8 padding[3];                  /* Padding for alignment */
-    f32 dropout_rate;               /* Dropout probability */
+    s32 dropout_rate;               /* Dropout probability in fixed point format */
     bool batch_norm;                /* Batch normalization enabled */
     s32 *bn_gamma NEURAL_ALIGN;     /* Batch norm scale parameters */
     s32 *bn_beta NEURAL_ALIGN;      /* Batch norm shift parameters */
@@ -284,13 +292,13 @@ s32 apply_activation(s32 x, u8 activation_type);
 
 /* Main API functions */
 int neural_network_init(neural_network_t *nn, u32 input_size, u32 hidden_size, 
-                       u32 output_size, bool use_batch_norm, f32 dropout_rate);
+                       u32 output_size, bool use_batch_norm, s32 dropout_rate);
 void neural_network_cleanup(neural_network_t *nn);
 neural_network_t *neural_network_ref(neural_network_t *nn);
 void neural_network_unref(neural_network_t *nn);
 
 /* Utility functions */
-u32 neural_hash_input(s32 *input, u32 size);
+u32 neural_hash_input(const s32 *input, u32 size);
 void neural_update_stats(neural_network_t *nn, ktime_t start_time);
 size_t neural_calculate_layer_memory(neural_layer_t *layer);
 int init_neural_layer(neural_layer_t *layer, u32 input_size, u32 output_size, u8 activation_type);
@@ -298,6 +306,11 @@ void free_neural_layer(neural_layer_t *layer);
 void neural_batch_normalize(neural_layer_t *layer, s32 *inputs, u32 batch_size);
 int neural_layer_forward_enhanced(neural_layer_t *layer, s32 *input, bool training_mode);
 int neural_layer_forward(neural_layer_t *layer, const s32 *input);
+
+/* Validation and debugging functions */
+int neural_layer_validate(neural_layer_t *layer);
+int neural_network_validate(neural_network_t *nn);
+void neural_network_print_stats(neural_network_t *nn);
 
 /* Legacy compatibility functions */
 neural_network_t* neural_network_create(u32 INPUT_LAYER, u32 HIDDEN_LAYER, u32 OUTPUT_LAYER);
@@ -317,8 +330,6 @@ int neural_network_load_model(neural_network_t *nn, const u8 *model_data, size_t
 /* Advanced functions */
 int neural_network_predict_cached(neural_network_t *nn, const s32 *input, s32 *output);
 neural_network_t* neural_network_create_advanced(u32 input_size, u32 hidden_size, u32 output_size,
-                                                 bool use_batch_norm, f32 dropout_rate);
-
-/* Legacy constructor function */
+                                                  bool use_batch_norm, s32 dropout_rate);/* Legacy constructor function */
 neural_network_t neural_network_constructor(int INPUT_LAYER, int HIDDEN_LAYER, int OUTPUT_LAYER);
 #endif /* _UAPI_NEURAL_MODULE_H */
