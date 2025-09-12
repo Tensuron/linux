@@ -1,142 +1,165 @@
+#include <linux/xattr.h>
 #include <linux/fs.h>
+#include <linux/lsm_hooks.h>
 #include <linux/string.h>
 #include <linux/slab.h>
-#include <linux/errno.h>
-#include <linux/fsnotify.h>
-#include <linux/fsprotect.h>
+#include <linux/dcache.h>
+#include <linux/user_namespace.h>
+#include <linux/list.h>
+#include <linux/spinlock.h>
+#include <linux/mnt_idmapping.h>
 
-static int fsprotect_check_access(struct inode *inode, bool write_access);
-static int fsprotect_check_dir_access(struct inode *dir);
+#define READONLY_FL        0x1FAA1DEA
+#define EDITONLY_FL        0x2FEA1ACA
+#define NORMAL_FL          0x00000000
 
-/**
- * fsprotect_check_access - Check if access is allowed based on fsprotect flags
- * @inode: The inode to check
- * @write_access: Whether the operation requires write access
- *
- * Returns: 0 if access is allowed, -EPERM if not
- */
-static int fsprotect_check_access(struct inode *inode, bool write_access)
-{
-    int flag;
-    
+enum fsprotect_flags {
+    FSPROTECT_READONLY = READONLY_FL,
+    FSPROTECT_EDITONLY = EDITONLY_FL,
+    FSPROTECT_NORMAL = NORMAL_FL,
+};
+
+// Set attribute on a single file
+static inline void setAttributeOnFile(struct inode *inode, enum fsprotect_flags flag) {
+    if (!inode)
+        return;
+
+    struct dentry *dentry;
+    spin_lock(&inode->i_lock);
+    dentry = d_find_alias(inode);
+    spin_unlock(&inode->i_lock);
+
+    if (!dentry)
+        return;
+
+    if (!d_really_is_negative(dentry)) {
+        vfs_setxattr(&nop_mnt_idmap, dentry, "user.fsprotect", &flag, sizeof(flag), 0);
+    }
+    dput(dentry);
+}
+
+// Get attribute from a single file
+static inline int getAttributeFromFile(struct inode *inode) {
     if (!inode)
         return -EINVAL;
 
-    flag = getAttributeFromFile(inode);
+    struct dentry *dentry;
+    int ret = -ENOENT;
+    __u32 value = 0;
 
-    // If no attribute is set, allow access
-    if (flag < 0)
-        return 0;
+    spin_lock(&inode->i_lock);
+    dentry = d_find_alias(inode);
+    spin_unlock(&inode->i_lock);
 
-    // For write operations, check READONLY and EDITONLY flags
-    if (write_access) {
-        if (flag == FSPROTECT_READONLY)
-            return -EPERM;
-        if (flag != FSPROTECT_EDITONLY && flag != FSPROTECT_NORMAL)
-            return -EPERM;
+    if (!dentry)
+        return -ENOENT;
+
+    if (!d_really_is_negative(dentry)) {
+        ret = vfs_getxattr(&nop_mnt_idmap, dentry, "user.fsprotect", &value, sizeof(value));
+        if (ret == sizeof(value)) {
+            ret = (int)value;
+        }
+        else if (ret >= 0) {
+            ret = -EINVAL;
+        }
     }
-
-    return 0;
+    
+    dput(dentry);
+    return ret;
 }
 
-/**
- * fsprotect_check_dir_access - Check if directory access is allowed
- * @dir: The directory inode to check
- *
- * Returns: 0 if access is allowed, -EPERM if not
- */
-static int fsprotect_check_dir_access(struct inode *dir)
-{
-    int flag;
-
-    if (!dir)
+// Get attribute specifically for directory inode
+static inline int getDirectoryAttribute(struct inode *dir_inode) {
+    if (!dir_inode)
         return -EINVAL;
 
-    flag = getDirectoryAttribute(dir);
+    struct dentry *dentry;
+    int ret = -ENOENT;
+    __u32 value = 0;
 
-    // If no attribute is set, allow access
-    if (flag < 0)
-        return 0;
+    // Directory-specific validation
+    if (!S_ISDIR(dir_inode->i_mode))
+        return -ENOTDIR;
 
-    // For directories, only allow modifications if not READONLY
-    if (flag == FSPROTECT_READONLY)
-        return -EPERM;
+    spin_lock(&dir_inode->i_lock);
+    dentry = d_find_alias(dir_inode);
+    spin_unlock(&dir_inode->i_lock);
 
-    return 0;
-}
+    if (!dentry)
+        return -ENOENT;
 
-/**
- * fsprotect_inode_unlink - Check if file/directory can be unlinked
- * @dir: Parent directory inode
- * @dentry: The dentry being unlinked
- *
- * Returns: 0 if unlink is allowed, -EPERM if not
- */
-int fsprotect_inode_unlink(struct inode *dir, struct dentry *dentry)
-{
-    int ret;
-
-    // Check if parent directory allows modifications
-    ret = fsprotect_check_dir_access(dir);
-    if (ret)
-        return ret;
-
-    // Check if target allows modifications 
-    return fsprotect_check_access(d_inode(dentry), true);
-}
-
-/**
- * fsprotect_inode_rename - Check if file/directory can be renamed
- * @old_dir: Source directory inode
- * @old_dentry: Source dentry
- * @new_dir: Target directory inode
- * @new_dentry: Target dentry
- *
- * Returns: 0 if rename is allowed, -EPERM if not
- */
-int fsprotect_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
-                          struct inode *new_dir, struct dentry *new_dentry)
-{
-    int ret;
-
-    // Check source directory
-    ret = fsprotect_check_dir_access(old_dir);
-    if (ret)
-        return ret;
-
-    // Check target directory if different from source
-    if (new_dir != old_dir) {
-        ret = fsprotect_check_dir_access(new_dir);
-        if (ret)
-            return ret;
+    if (!d_really_is_negative(dentry)) {
+        ret = vfs_getxattr(&nop_mnt_idmap, dentry, "user.fsprotect", &value, sizeof(value));
+        if (ret == sizeof(value)) {
+            ret = (int)value;
+        }
+        else if (ret >= 0) {
+            ret = -EINVAL;
+        }
     }
+    
+    dput(dentry);
+    return ret;
+}
 
-    // Check source file/dir
-    ret = fsprotect_check_access(d_inode(old_dentry), true);
-    if (ret)
-        return ret;
+// Queue structure for directory traversal
+struct dir_queue {
+    struct list_head list;
+    struct dentry *dentry;
+};
 
-    // Check target file/dir if it exists
-    if (d_really_is_positive(new_dentry)) {
-        ret = fsprotect_check_access(d_inode(new_dentry), true);
-        if (ret)
-            return ret;
+// Set attribute on directory and all contents recursively
+static inline void setDirectoryAttribute(struct dentry *dir_dentry, enum fsprotect_flags flag) {
+    if (!dir_dentry || d_really_is_negative(dir_dentry))
+        return;
+
+    LIST_HEAD(queue);
+    struct dir_queue *entry = kmalloc(sizeof(*entry), GFP_KERNEL);
+    if (!entry)
+        return;
+    
+    INIT_LIST_HEAD(&entry->list);
+    entry->dentry = dget(dir_dentry);
+    list_add_tail(&entry->list, &queue);
+
+    while (!list_empty(&queue)) {
+        entry = list_first_entry(&queue, struct dir_queue, list);
+        list_del(&entry->list);
+        struct dentry *dentry = entry->dentry;
+        struct inode *inode = d_inode(dentry);
+
+        // Set attribute on current item
+        setAttributeOnFile(inode, flag);
+
+        // Process directories recursively
+        if (S_ISDIR(inode->i_mode)) {
+            struct dentry *child;
+            spin_lock(&dentry->d_lock);
+            // Use hlist_for_each_entry for d_children (which is now an hlist)
+            hlist_for_each_entry(child, &dentry->d_children, d_sib) {
+                // Skip invalid entries
+                if (d_unhashed(child) || !child->d_inode || child == dentry)
+                    continue;
+                
+                // Skip "." and ".." entries
+                if (child->d_name.len == 1 && child->d_name.name[0] == '.')
+                    continue;
+                if (child->d_name.len == 2 && child->d_name.name[0] == '.' && child->d_name.name[1] == '.')
+                    continue;
+
+                // Add child to processing queue
+                struct dir_queue *new_entry = kmalloc(sizeof(*new_entry), GFP_KERNEL);
+                if (new_entry) {
+                    INIT_LIST_HEAD(&new_entry->list);
+                    new_entry->dentry = dget(child);
+                    list_add_tail(&new_entry->list, &queue);
+                }
+            }
+            spin_unlock(&dentry->d_lock);
+        }
+        
+        // Clean up processed entry
+        dput(dentry);
+        kfree(entry);
     }
-
-    return 0;
 }
-
-/**
- * fsprotect_inode_write - Check if file can be written to
- * @inode: The inode being written to
- *
- * Returns: 0 if write is allowed, -EPERM if not
- */
-int fsprotect_inode_write(struct inode *inode)
-{
-    return fsprotect_check_access(inode, true);
-}
-
-EXPORT_SYMBOL(fsprotect_inode_unlink);
-EXPORT_SYMBOL(fsprotect_inode_rename);
-EXPORT_SYMBOL(fsprotect_inode_write);

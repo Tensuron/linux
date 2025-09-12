@@ -33,7 +33,6 @@
 
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
-#include <linux/fsprotect.h>
 #include "ext2.h"
 #include "xattr.h"
 #include "acl.h"
@@ -278,15 +277,6 @@ static int ext2_unlink(struct inode *dir, struct dentry *dentry)
 	struct folio *folio;
 	int err;
 
-	int attr = getAttributeFromFile(dir);
-
-	if (attr == READONLY_FL || attr == EDITONLY_FL) {
-		return PTR_ERR("Error Removing File/Directory: Access Is Denied");
-	}
-	else if(attr == -EINVAL) {
-		return PTR_ERR("Error Removing File/Directory: Unknown Attribute");
-	}
-
 	err = dquot_initialize(dir);
 	if (err)
 		goto out;
@@ -350,25 +340,6 @@ static int ext2_rename (struct mnt_idmap * idmap,
 
 	if (flags & ~RENAME_NOREPLACE)
 		return -EINVAL;
-
-	int attr;
-	if(S_ISREG(old_dir->i_mode) == true) {
-		attr = getAttributeFromFile(old_dir);
-	}
-	else if (S_ISDIR(old_dir->i_mode) == true) {
-		attr = getDirectoryAttribute(old_dir);
-	}
-	else {
-		ext2_error(old_dir->i_sb, "%s", "Invalid inode type for rename");
-		return -EINVAL;
-	}
-
-	if (attr == READONLY_FL || attr == EDITONLY_FL) {
-		return PTR_ERR("Error Moving File/Directory: Access Is Denied");
-	}
-	else if(attr == -EINVAL) {
-		return PTR_ERR("Error Moving File/Directory: Unknown Attribute");
-	}
 
 	err = dquot_initialize(old_dir);
 	if (err)
