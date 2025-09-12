@@ -304,15 +304,6 @@ static int ext2_rmdir (struct inode * dir, struct dentry *dentry)
 	struct inode * inode = d_inode(dentry);
 	int err = -ENOTEMPTY;
 
-	int attr = getDirectoryAttribute(dir);
-
-	if (attr == READONLY_FL || attr == EDITONLY_FL) {
-		return PTR_ERR("Error Removing File/Directory: Access Is Denied");
-	}
-	else if(attr == -EINVAL) {
-		return PTR_ERR("Error Removing File/Directory: Unknown Attribute");
-	}
-
 	if (ext2_empty_dir(inode)) {
 		err = ext2_unlink(dir, dentry);
 		if (!err) {

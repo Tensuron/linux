@@ -36,7 +36,6 @@
 #include <linux/bio.h>
 #include <linux/iversion.h>
 #include <linux/unicode.h>
-#include <linux/path.h>
 #include "ext4.h"
 #include "ext4_jbd2.h"
 
@@ -3140,16 +3139,6 @@ static int ext4_rmdir(struct inode *dir, struct dentry *dentry)
 	retval = ext4_emergency_state(dir->i_sb);
 	if (unlikely(retval))
 		return retval;
-
-	int attr = getDirectoryAttribute(inode);
-	if (attr == READONLY_FL || attr == EDITONLY_FL) {
-		retval = PTR_ERR("Error Removing Directory: Access Is Denied");
-		return retval;
-	}
-	else if(attr == -EINVAL) {
-		retval = PTR_ERR("Error Removing Directory: Unknown Attribute");
-		return retval;
-	}
 
 	/* Initialize quotas before so that eventual writes go in
 	 * separate transaction */
