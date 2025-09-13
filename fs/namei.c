@@ -18,7 +18,6 @@
 #include <linux/init.h>
 #include <linux/export.h>
 #include <linux/slab.h>
-#include <linux/fsprotect.h>
 #include <linux/wordpart.h>
 #include <linux/fs.h>
 #include <linux/filelock.h>
@@ -4579,9 +4578,6 @@ int vfs_unlink(struct mnt_idmap *idmap, struct inode *dir,
 	else if (is_local_mountpoint(dentry))
 		error = -EBUSY;
 	else {
-		error = fsprotect_inode_unlink(dir, dentry);
-		if (error)
-			goto out;
 		error = security_inode_unlink(dir, dentry);
 		if (!error) {
 			error = try_break_deleg(target, delegated_inode);
@@ -5049,11 +5045,6 @@ int vfs_rename(struct renamedata *rd)
 
 	if (!old_dir->i_op->rename)
 		return -EPERM;
-		
-	/* Check fsprotect permissions */
-	error = fsprotect_inode_rename(old_dir, old_dentry, new_dir, new_dentry);
-	if (error)
-		return error;
 
 	/*
 	 * If we are going to change the parent - check write permissions,

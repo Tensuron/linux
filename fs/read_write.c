@@ -10,7 +10,6 @@
 #include <linux/sched/xacct.h>
 #include <linux/fcntl.h>
 #include <linux/file.h>
-#include <linux/fsprotect.h>
 #include <linux/uio.h>
 #include <linux/fsnotify.h>
 #include <linux/security.h>
@@ -938,11 +937,6 @@ ssize_t vfs_iocb_iter_write(struct file *file, struct kiocb *iocb,
 		return -EBADF;
 	if (!(file->f_mode & FMODE_CAN_WRITE))
 		return -EINVAL;
-
-	/* Check fsprotect write permission */
-	ret = fsprotect_inode_write(file->f_inode);
-	if (ret < 0)
-		return ret;
 
 	tot_len = iov_iter_count(iter);
 	if (!tot_len)
