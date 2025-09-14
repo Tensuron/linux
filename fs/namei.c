@@ -40,6 +40,7 @@
 #include <linux/bitops.h>
 #include <linux/init_task.h>
 #include <linux/uaccess.h>
+#include <linux/fsprotect.h>
 
 #include "internal.h"
 #include "mount.h"
@@ -4566,6 +4567,15 @@ int vfs_unlink(struct mnt_idmap *idmap, struct inode *dir,
 	struct inode *target = dentry->d_inode;
 	int error = may_delete(idmap, dir, dentry, 0);
 
+	if(!dir)
+		return -EBADF;
+	
+	int remove_check = canRemove(dir);
+	if(remove_check < 0)
+		return remove_check;
+	if(remove_check != 1)
+		return -EACCES;
+
 	if (error)
 		return error;
 
@@ -5020,6 +5030,15 @@ int vfs_rename(struct renamedata *rd)
 	unsigned max_links = new_dir->i_sb->s_max_links;
 	struct name_snapshot old_name;
 	bool lock_old_subdir, lock_new_subdir;
+
+	if(!old_dir)
+		return -EBADF;
+	
+	int remove_check = canRemove(old_dir);
+	if(remove_check < 0)
+		return remove_check;
+	if(remove_check != 1)
+		return -EACCES;
 
 	if (source == target)
 		return 0;

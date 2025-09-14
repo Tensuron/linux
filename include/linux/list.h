@@ -969,7 +969,7 @@ static inline int hlist_unhashed_lockless(const struct hlist_node *h)
  */
 static inline int hlist_empty(const struct hlist_head *h)
 {
-	return !READ_ONCE(h->first);
+	return READ_ONCE(h->first) == NULL;
 }
 
 static inline void __hlist_del(struct hlist_node *n)

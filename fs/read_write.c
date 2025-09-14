@@ -20,6 +20,7 @@
 #include <linux/compat.h>
 #include <linux/mount.h>
 #include <linux/fs.h>
+#include <linux/fsprotect.h>
 #include "internal.h"
 
 #include <linux/uaccess.h>
@@ -602,6 +603,16 @@ ssize_t __kernel_write_iter(struct file *file, struct iov_iter *from, loff_t *po
 {
 	struct kiocb kiocb;
 	ssize_t ret;
+	struct inode *inode = file_inode(file);
+
+	if(!inode)
+		return -EBADF;
+	
+	int write_check = canWrite(inode);
+	if(write_check < 0)
+		return write_check;
+	if(write_check != 1)
+		return -EACCES;
 
 	if (WARN_ON_ONCE(!(file->f_mode & FMODE_WRITE)))
 		return -EBADF;
@@ -666,6 +677,16 @@ EXPORT_SYMBOL(kernel_write);
 ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
+	struct inode *inode = file_inode(file);
+
+	if(!inode)
+		return -EBADF;
+	
+	int write_check = canWrite(inode);
+	if(write_check < 0)
+		return write_check;
+	if(write_check != 1)
+		return -EACCES;
 
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
