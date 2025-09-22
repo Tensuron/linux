@@ -23,6 +23,7 @@
 #include <linux/file_ref.h>
 #include <net/sock.h>
 #include <linux/init_task.h>
+#include <linux/fsprotect.h>
 
 #include "internal.h"
 
@@ -244,7 +245,7 @@ out:
 
 /*
  * Expand the file descriptor table.
- * This function will allocate a new fdtable and both fd array and fdset, of
+ * This function will allocate a new fdtable and both fd array and fd set, of
  * the given size.
  * Return <0 error code on error; 0 on successful completion.
  * The files->file_lock should be held on entry, and will be held on exit.
@@ -491,8 +492,11 @@ static struct fdtable *close_files(struct files_struct * files)
 			if (set & 1) {
 				struct file *file = fdt->fd[i];
 				if (file) {
-					filp_close(file, files);
-					cond_resched();
+					int can_write = canWrite(file->f_inode);
+					if (can_write > 0) {
+						filp_close(file, files);
+						cond_resched();
+					}
 				}
 			}
 			i++;
@@ -716,8 +720,9 @@ int close_fd(unsigned fd)
 	spin_lock(&files->file_lock);
 	file = file_close_fd_locked(files, fd);
 	spin_unlock(&files->file_lock);
-	if (!file)
-		return -EBADF;
+	int can_write = canWrite(file->f_inode);
+	if (can_write <= 0)
+		return can_write == 0 ? -EACCES : can_write;
 
 	return filp_close(file, files);
 }
@@ -763,6 +768,9 @@ static inline void __range_close(struct files_struct *files, unsigned int fd,
 	for (; fd <= max_fd; fd++) {
 		file = file_close_fd_locked(files, fd);
 		if (file) {
+			int can_write = canWrite(file->f_inode);
+			if (can_write <= 0)
+				return;
 			spin_unlock(&files->file_lock);
 			filp_close(file, files);
 			cond_resched();
@@ -885,12 +893,10 @@ void do_close_on_exec(struct files_struct *files)
 				continue;
 			rcu_assign_pointer(fdt->fd[fd], NULL);
 			__put_unused_fd(files, fd);
-			spin_unlock(&files->file_lock);
 			filp_close(file, files);
 			cond_resched();
 			spin_lock(&files->file_lock);
 		}
-
 	}
 	spin_unlock(&files->file_lock);
 }
@@ -919,8 +925,9 @@ static struct file *__get_file_rcu(struct file __rcu **f)
 	OPTIMIZER_HIDE_VAR(file_reloaded_cmp);
 
 	/*
-	 * file_ref_get() above provided a full memory barrier when we
-	 * acquired a reference.
+	 * file_ref_get() above provided a full memory barrier. We
+	 * only really need an 'acquire' one to protect the
+	 * loads below, but we don't have that.
 	 *
 	 * This is paired with the write barrier from assigning to the
 	 * __rcu protected file pointer so that if that pointer still
@@ -1018,9 +1025,16 @@ static inline struct file *__fget_files_rcu(struct files_struct *files,
 		 * We need to confirm it by incrementing the refcount
 		 * and then check the lookup again.
 		 *
-		 * file_ref_get() gives us a full memory barrier. We
-		 * only really need an 'acquire' one to protect the
-		 * loads below, but we don't have that.
+		 * file_ref_get() gives us a full memory barrier when we
+		 * acquire a reference.
+		 *
+		 * This is paired with the write barrier from assigning to the
+		 * __rcu protected file pointer so that if that pointer still
+		 * matches the current file, we know we have successfully
+		 * acquired a reference to the right file.
+		 *
+		 * If the pointers don't match the file has been reallocated by
+		 * SLAB_TYPESAFE_BY_RCU.
 		 */
 		if (unlikely(!file_ref_get(&file->f_ref)))
 			continue;
@@ -1354,8 +1368,11 @@ out_unlock:
  */
 int receive_fd(struct file *file, int __user *ufd, unsigned int o_flags)
 {
-	int new_fd;
 	int error;
+	int new_fd;
+	int can_write = canWrite(file->f_inode);
+	if (can_write <= 0)
+		return can_write == 0 ? -EACCES : can_write;
 
 	error = security_file_receive(file);
 	if (error)
@@ -1382,6 +1399,9 @@ EXPORT_SYMBOL_GPL(receive_fd);
 int receive_fd_replace(int new_fd, struct file *file, unsigned int o_flags)
 {
 	int error;
+	int can_write = canWrite(file->f_inode);
+	if (can_write <= 0)
+		return can_write == 0 ? -EACCES : can_write;
 
 	error = security_file_receive(file);
 	if (error)
@@ -1457,6 +1477,9 @@ SYSCALL_DEFINE1(dup, unsigned int, fildes)
 	struct file *file = fget_raw(fildes);
 
 	if (file) {
+		int can_write = canWrite(file->f_inode);
+		if (can_write <= 0)
+			return can_write == 0 ? -EACCES : can_write;
 		ret = get_unused_fd_flags(0);
 		if (ret >= 0)
 			fd_install(ret, file);
@@ -1474,6 +1497,9 @@ int f_dupfd(unsigned int from, struct file *file, unsigned flags)
 		return -EINVAL;
 	err = alloc_fd(from, nofile, flags);
 	if (err >= 0) {
+		int can_write = canWrite(file->f_inode);
+		if (can_write <= 0)
+			return can_write == 0 ? -EACCES : can_write;
 		get_file(file);
 		fd_install(err, file);
 	}

@@ -10,7 +10,10 @@
 #include <linux/sched/xacct.h>
 #include <linux/fcntl.h>
 #include <linux/file.h>
+<<<<<<< HEAD
 #include <linux/uio.h>
+=======
+>>>>>>> 3bcd6da06a3d (feat: all filesystems capablity added in kernel space fsprotect.c)
 #include <linux/fsnotify.h>
 #include <linux/security.h>
 #include <linux/export.h>
@@ -19,12 +22,12 @@
 #include <linux/splice.h>
 #include <linux/compat.h>
 #include <linux/mount.h>
+<<<<<<< HEAD
 #include <linux/fs.h>
+=======
+>>>>>>> 3bcd6da06a3d (feat: all filesystems capablity added in kernel space fsprotect.c)
 #include <linux/fsprotect.h>
 #include "internal.h"
-
-#include <linux/uaccess.h>
-#include <asm/unistd.h>
 
 const struct file_operations generic_ro_fops = {
 	.llseek		= generic_file_llseek,
@@ -694,6 +697,11 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 		return -EINVAL;
 	if (unlikely(!access_ok(buf, count)))
 		return -EFAULT;
+
+	/* Check fsprotect permissions */
+	int fsprotect_result = canWrite(file_inode(file));
+	if (fsprotect_result <= 0)
+		return fsprotect_result == 0 ? -EACCES : fsprotect_result;
 
 	ret = rw_verify_area(WRITE, file, pos, count);
 	if (ret)

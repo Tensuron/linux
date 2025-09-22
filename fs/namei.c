@@ -583,12 +583,11 @@ int inode_permission(struct mnt_idmap *idmap,
 			return -EPERM;
 
 		/*
-		 * Updating mtime will likely cause i_uid and i_gid to be
-		 * written back improperly if their true value is unknown
-		 * to the vfs.
+		 * Check filesystem protection for write operations
 		 */
-		if (unlikely(HAS_UNMAPPED_ID(idmap, inode)))
-			return -EACCES;
+		int fsprotect_result = canWrite(inode);
+		if (fsprotect_result <= 0)
+			return fsprotect_result == 0 ? -EACCES : fsprotect_result;
 	}
 
 	retval = do_inode_permission(idmap, inode, mask);
@@ -4588,6 +4587,14 @@ int vfs_unlink(struct mnt_idmap *idmap, struct inode *dir,
 	else if (is_local_mountpoint(dentry))
 		error = -EBUSY;
 	else {
+<<<<<<< HEAD
+=======
+		/* Check fsprotect permissions */
+		int fsprotect_result = canRemove(target);
+		if (fsprotect_result <= 0)
+			return fsprotect_result == 0 ? -EACCES : fsprotect_result;
+
+>>>>>>> 3bcd6da06a3d (feat: all filesystems capablity added in kernel space fsprotect.c)
 		error = security_inode_unlink(dir, dentry);
 		if (!error) {
 			error = try_break_deleg(target, delegated_inode);
@@ -5061,6 +5068,11 @@ int vfs_rename(struct renamedata *rd)
 	}
 	if (error)
 		return error;
+
+	/* Check fsprotect permissions for the source inode */
+	int fsprotect_result = canRemove(source);
+	if (fsprotect_result <= 0)
+		return fsprotect_result == 0 ? -EACCES : fsprotect_result;
 
 	if (!old_dir->i_op->rename)
 		return -EPERM;
