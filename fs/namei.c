@@ -18,7 +18,6 @@
 #include <linux/init.h>
 #include <linux/export.h>
 #include <linux/slab.h>
-#include <linux/fsprotect.h>
 #include <linux/wordpart.h>
 #include <linux/fs.h>
 #include <linux/filelock.h>
@@ -41,6 +40,7 @@
 #include <linux/bitops.h>
 #include <linux/init_task.h>
 #include <linux/uaccess.h>
+#include <linux/fsprotect.h>
 
 #include "internal.h"
 #include "mount.h"
@@ -4566,6 +4566,15 @@ int vfs_unlink(struct mnt_idmap *idmap, struct inode *dir,
 	struct inode *target = dentry->d_inode;
 	int error = may_delete(idmap, dir, dentry, 0);
 
+	if(!dir)
+		return -EBADF;
+	
+	int remove_check = canRemove(dir);
+	if(remove_check < 0)
+		return remove_check;
+	if(remove_check != 1)
+		return -EACCES;
+
 	if (error)
 		return error;
 
@@ -4578,11 +4587,20 @@ int vfs_unlink(struct mnt_idmap *idmap, struct inode *dir,
 	else if (is_local_mountpoint(dentry))
 		error = -EBUSY;
 	else {
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+>>>>>>> ae19c441eb8d91998effe91868492da5e2f1ffd7
 		/* Check fsprotect permissions */
 		int fsprotect_result = canRemove(target);
 		if (fsprotect_result <= 0)
 			return fsprotect_result == 0 ? -EACCES : fsprotect_result;
 
+<<<<<<< HEAD
+=======
+>>>>>>> 3bcd6da06a3d (feat: all filesystems capablity added in kernel space fsprotect.c)
+>>>>>>> ae19c441eb8d91998effe91868492da5e2f1ffd7
 		error = security_inode_unlink(dir, dentry);
 		if (!error) {
 			error = try_break_deleg(target, delegated_inode);
@@ -5025,6 +5043,15 @@ int vfs_rename(struct renamedata *rd)
 	unsigned max_links = new_dir->i_sb->s_max_links;
 	struct name_snapshot old_name;
 	bool lock_old_subdir, lock_new_subdir;
+
+	if(!old_dir)
+		return -EBADF;
+	
+	int remove_check = canRemove(old_dir);
+	if(remove_check < 0)
+		return remove_check;
+	if(remove_check != 1)
+		return -EACCES;
 
 	if (source == target)
 		return 0;

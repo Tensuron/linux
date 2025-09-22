@@ -10,6 +10,13 @@
 #include <linux/sched/xacct.h>
 #include <linux/fcntl.h>
 #include <linux/file.h>
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+#include <linux/uio.h>
+=======
+>>>>>>> 3bcd6da06a3d (feat: all filesystems capablity added in kernel space fsprotect.c)
+>>>>>>> ae19c441eb8d91998effe91868492da5e2f1ffd7
 #include <linux/fsnotify.h>
 #include <linux/security.h>
 #include <linux/export.h>
@@ -18,6 +25,13 @@
 #include <linux/splice.h>
 #include <linux/compat.h>
 #include <linux/mount.h>
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+#include <linux/fs.h>
+=======
+>>>>>>> 3bcd6da06a3d (feat: all filesystems capablity added in kernel space fsprotect.c)
+>>>>>>> ae19c441eb8d91998effe91868492da5e2f1ffd7
 #include <linux/fsprotect.h>
 #include "internal.h"
 
@@ -598,6 +612,16 @@ ssize_t __kernel_write_iter(struct file *file, struct iov_iter *from, loff_t *po
 {
 	struct kiocb kiocb;
 	ssize_t ret;
+	struct inode *inode = file_inode(file);
+
+	if(!inode)
+		return -EBADF;
+	
+	int write_check = canWrite(inode);
+	if(write_check < 0)
+		return write_check;
+	if(write_check != 1)
+		return -EACCES;
 
 	if (WARN_ON_ONCE(!(file->f_mode & FMODE_WRITE)))
 		return -EBADF;
@@ -662,6 +686,16 @@ EXPORT_SYMBOL(kernel_write);
 ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
+	struct inode *inode = file_inode(file);
+
+	if(!inode)
+		return -EBADF;
+	
+	int write_check = canWrite(inode);
+	if(write_check < 0)
+		return write_check;
+	if(write_check != 1)
+		return -EACCES;
 
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;

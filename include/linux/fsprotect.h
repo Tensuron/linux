@@ -5,6 +5,22 @@
 #include <linux/fs.h>
 #include <uapi/linux/fsprotect.h>
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+/* Internal helper functions */
+extern int getAttributeFromFile(struct inode *inode);
+extern int getAttributeFromDirectory(struct inode *dir_inode);
+
+/* External helper functions */
+extern int setAttributeOnFile(struct inode *inode, int flag);
+extern int clearAttributeOnFile(struct inode *inode);
+extern int setAttributeOnDirectory(struct dentry *dir_dentry, int flag);
+extern int clearAttributeOnDirectory(struct inode *inode);
+extern int canRemove(struct inode *inode);
+extern int canWrite(struct inode *inode);
+=======
+>>>>>>> ae19c441eb8d91998effe91868492da5e2f1ffd7
 /* Filesystem types */
 #define FS_TYPE_UNKNOWN     0
 #define FS_TYPE_EXT2        1
@@ -108,5 +124,9 @@ extern int network_fs_clear_attr(struct inode *inode);
 extern int readonly_fs_get_attr(struct inode *inode, int *value);
 extern int readonly_fs_set_attr(struct inode *inode, int flag);
 extern int readonly_fs_clear_attr(struct inode *inode);
+<<<<<<< HEAD
+=======
+>>>>>>> 3bcd6da06a3d (feat: all filesystems capablity added in kernel space fsprotect.c)
+>>>>>>> ae19c441eb8d91998effe91868492da5e2f1ffd7
 
 #endif /* _LINUX_FSPROTECT_H */
