@@ -25,8 +25,7 @@
  *	Theodore Ts'o, 2002
  */
 
-#include <linux/fs.h>
-#include <linux/pagemap.h>
+#include <linux/fsprotect.h>
 #include <linux/time.h>
 #include <linux/fcntl.h>
 #include <linux/stat.h>

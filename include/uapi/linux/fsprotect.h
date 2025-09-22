@@ -27,9 +27,9 @@ struct dir_queue {
     struct dentry *dentry;
 };
 
-extern static inline void setAttributeOnFile(struct inode *inode, enum fsprotect_flags flag);
-extern static inline int getAttributeFromFile(struct inode *inode);
-extern static inline int getDirectoryAttribute(struct inode *dir_inode);
-extern static inline void setDirectoryAttribute(struct dentry *dir_dentry, enum fsprotect_flags flag);
+extern inline void setAttributeOnFile(struct inode *inode, enum fsprotect_flags flag);
+extern inline int getAttributeFromFile(struct inode *inode);
+extern inline int getDirectoryAttribute(struct inode *dir_inode);
+extern inline void setDirectoryAttribute(struct dentry *dir_dentry, enum fsprotect_flags flag);
 
 #endif

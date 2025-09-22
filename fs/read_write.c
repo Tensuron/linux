@@ -10,8 +10,6 @@
 #include <linux/sched/xacct.h>
 #include <linux/fcntl.h>
 #include <linux/file.h>
-#include <linux/fsprotect.h>
-#include <linux/uio.h>
 #include <linux/fsnotify.h>
 #include <linux/security.h>
 #include <linux/export.h>
@@ -20,11 +18,8 @@
 #include <linux/splice.h>
 #include <linux/compat.h>
 #include <linux/mount.h>
-#include <linux/fs.h>
+#include <linux/fsprotect.h>
 #include "internal.h"
-
-#include <linux/uaccess.h>
-#include <asm/unistd.h>
 
 const struct file_operations generic_ro_fops = {
 	.llseek		= generic_file_llseek,
@@ -675,6 +670,11 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 	if (unlikely(!access_ok(buf, count)))
 		return -EFAULT;
 
+	/* Check fsprotect permissions */
+	int fsprotect_result = canWrite(file_inode(file));
+	if (fsprotect_result <= 0)
+		return fsprotect_result == 0 ? -EACCES : fsprotect_result;
+
 	ret = rw_verify_area(WRITE, file, pos, count);
 	if (ret)
 		return ret;
@@ -938,11 +938,6 @@ ssize_t vfs_iocb_iter_write(struct file *file, struct kiocb *iocb,
 		return -EBADF;
 	if (!(file->f_mode & FMODE_CAN_WRITE))
 		return -EINVAL;
-
-	/* Check fsprotect write permission */
-	ret = fsprotect_inode_write(file->f_inode);
-	if (ret < 0)
-		return ret;
 
 	tot_len = iov_iter_count(iter);
 	if (!tot_len)
